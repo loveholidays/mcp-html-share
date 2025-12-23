@@ -1,0 +1,38 @@
+system_id: mcp-html-share
+name: mcp-html-share
+description: MCP server that shares HTML content via Google Cloud Storage. Provides a share-html tool that uploads HTML content and returns a public URL.
+team: Boost
+lifecycle: production
+classification_level: Internal
+repository_url: https://github.com/loveholidays/mcp-html-share/tree/main
+documentation_url: https://github.com/loveholidays/mcp-html-share/tree/main/README.md
+commission_date: "2025-07-21"
+
+apis:
+  - name: mcp-html-share
+    description: MCP server providing the share-html tool for uploading HTML content to GCS
+    type: mcp
+    visibility: organisation
+    classification_level: Internal
+    schema_url: null
+
+  - name: /livez
+    description: Health check endpoint for liveness probes
+    type: http
+    visibility: internal
+    classification_level: Public
+    schema_url: null
+
+  - name: /metrics
+    description: Prometheus metrics endpoint
+    type: http
+    visibility: internal
+    classification_level: Public
+    schema_url: null
+
+dependencies:
+  - name: gcs-api
+    type: bucket
+    version: null
+    description: Google Cloud Storage for storing and serving uploaded HTML content
+    schema_url: null
