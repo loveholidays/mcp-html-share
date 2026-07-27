@@ -7,7 +7,7 @@ all: build
 
 ##@ Tools
 tools: ## Installs required binaries locally
-	GOTOOLCHAIN=go1.24.4 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	GOTOOLCHAIN=go1.25.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 ##@ Building
 build: test ## Builds $(APP_NAME) go binary for local arch
