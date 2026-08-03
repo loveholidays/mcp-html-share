@@ -14,6 +14,8 @@ type Config struct {
 	HTTPPort   string
 	HealthPort string
 	PublicURL  bool
+	SentryDSN  string
+	SentryEnv  string
 }
 
 // LoadFromFlags parses command line flags and returns configuration.
@@ -23,6 +25,8 @@ func LoadFromFlags() (*Config, error) {
 	httpPort := flag.String("http-port", "8080", "HTTP port for MCP server")
 	healthPort := flag.String("health-port", "9090", "Health and metrics port")
 	publicURL := flag.Bool("public-url", true, "Return public URLs (true) or signed URLs (false)")
+	sentryDSN := flag.String("sentry-dsn", os.Getenv("SENTRY_DSN"), "Sentry DSN (optional; disabled when empty)")
+	sentryEnv := flag.String("sentry-environment", os.Getenv("SENTRY_ENVIRONMENT"), "Sentry environment (optional)")
 
 	flag.Parse()
 
@@ -32,6 +36,8 @@ func LoadFromFlags() (*Config, error) {
 		HTTPPort:   *httpPort,
 		HealthPort: *healthPort,
 		PublicURL:  *publicURL,
+		SentryDSN:  *sentryDSN,
+		SentryEnv:  *sentryEnv,
 	}
 
 	if err := config.Validate(); err != nil {
