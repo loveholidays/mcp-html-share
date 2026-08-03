@@ -60,6 +60,10 @@ func (s *Sentry) Close() {
 }
 
 func ScrubEvent(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-	eventID, level := event.EventID, event.Level
-	return &sentry.Event{EventID: eventID, Level: level, Message: "application error"}
+	return &sentry.Event{
+		EventID:     event.EventID,
+		Level:       event.Level,
+		Environment: event.Environment,
+		Message:     "application error",
+	}
 }

@@ -26,6 +26,7 @@ func (s *SentryTestSuite) TestInitWithoutDSNDisablesReporting() {
 func (s *SentryTestSuite) TestScrubEventRemovesSensitiveFields() {
 	event := &sentry.Event{
 		Message:     "secret body",
+		Environment: "production",
 		Request:     &sentry.Request{URL: "https://example.test/private?token=secret", Data: "secret body"},
 		User:        sentry.User{Email: "person@example.test", IPAddress: "192.0.2.1"},
 		Contexts:    map[string]sentry.Context{"local": {"path": "/private"}},
@@ -37,6 +38,7 @@ func (s *SentryTestSuite) TestScrubEventRemovesSensitiveFields() {
 	scrubbed := observability.ScrubEvent(event, nil)
 	s.Equal(event.EventID, scrubbed.EventID)
 	s.Equal(event.Level, scrubbed.Level)
+	s.Equal("production", scrubbed.Environment)
 	s.Equal("application error", scrubbed.Message)
 	s.Nil(scrubbed.Request)
 	s.True(scrubbed.User.IsEmpty())

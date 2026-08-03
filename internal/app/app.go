@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os/signal"
 	"syscall"
@@ -52,7 +53,9 @@ func (a *App) Run() error {
 	// Start MCP server (this blocks until shutdown)
 	a.logger.Info("Starting MCP server", "transport", a.config.Transport)
 	if err := a.mcpServer.Start(ctx, a.config.Transport, a.config.HTTPPort); err != nil {
-		a.sentry.CaptureError(err)
+		if !errors.Is(err, context.Canceled) {
+			a.sentry.CaptureError(err)
+		}
 		a.logger.Error("MCP server failed", "error", err)
 		return err
 	}
