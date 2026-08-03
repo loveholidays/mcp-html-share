@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	cloud.google.com/go/storage v1.55.0
+	github.com/getsentry/sentry-go v0.48.0
 	github.com/mark3labs/mcp-go v0.32.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.11.1

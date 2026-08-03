@@ -73,6 +73,12 @@ mcp-html-share --bucket=your-bucket-name --transport=http
 - `--http-port`: HTTP port (default: "8080")
 - `--health-port`: Health/metrics port (default: "9090")
 - `--public-url`: Return public URLs (default: true) or signed URLs (false)
+- `--sentry-dsn`: Optional Sentry DSN. Error reporting is disabled when omitted. Defaults to `SENTRY_DSN`.
+- `--sentry-environment`: Optional Sentry environment name. Defaults to `SENTRY_ENVIRONMENT`.
+
+### Optional error reporting
+
+Sentry reporting is opt-in and disabled unless `--sentry-dsn` is provided. Events are reduced to an event ID, error level, and fixed `application error` message before sending. The server does not attach request URLs, request bodies, users, breadcrumbs, tags, local context, exception details, HTML content, short names, uploaded URLs, or local environment data to Sentry events.
 
 ## MCP Tools
 

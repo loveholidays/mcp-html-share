@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/loveholidays/mcp-html-share/internal/gcs"
+	"github.com/loveholidays/mcp-html-share/internal/observability"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +39,7 @@ type Server struct {
 	gcsService gcs.Service
 	logger     *slog.Logger
 	server     *server.MCPServer
+	sentry     *observability.Sentry
 }
 
 func New(bucketName string, publicURL bool, logger *slog.Logger) *Server {
@@ -50,7 +52,12 @@ func New(bucketName string, publicURL bool, logger *slog.Logger) *Server {
 	return &Server{
 		gcsService: gcsService,
 		logger:     logger,
+		sentry:     observability.Init("", "", logger),
 	}
+}
+
+func (s *Server) SetSentry(reporter *observability.Sentry) {
+	s.sentry = reporter
 }
 
 func (s *Server) Start(ctx context.Context, transport, httpPort string) error {
@@ -62,7 +69,9 @@ func (s *Server) Start(ctx context.Context, transport, httpPort string) error {
 	case "http":
 		return s.startHTTPServer(ctx, httpPort)
 	default:
-		return fmt.Errorf("unsupported transport: %s", transport)
+		err := fmt.Errorf("unsupported transport: %s", transport)
+		s.capture(err)
+		return err
 	}
 }
 
@@ -170,25 +179,31 @@ func (s *Server) handleShareHTML(ctx context.Context, request mcp.CallToolReques
 	// Extract parameters
 	htmlContent, err := request.RequireString("html_content")
 	if err != nil {
+		s.capture(err)
 		uploadsTotal.WithLabelValues("error").Inc()
 		return nil, fmt.Errorf("html_content parameter is required: %w", err)
 	}
 
 	shortName, err := request.RequireString("short_name")
 	if err != nil {
+		s.capture(err)
 		uploadsTotal.WithLabelValues("error").Inc()
 		return nil, fmt.Errorf("short_name parameter is required: %w", err)
 	}
 
 	// Validate inputs
 	if htmlContent == "" {
+		err := fmt.Errorf("html_content cannot be empty")
+		s.capture(err)
 		uploadsTotal.WithLabelValues("error").Inc()
-		return nil, fmt.Errorf("html_content cannot be empty")
+		return nil, err
 	}
 
 	if shortName == "" {
+		err := fmt.Errorf("short_name cannot be empty")
+		s.capture(err)
 		uploadsTotal.WithLabelValues("error").Inc()
-		return nil, fmt.Errorf("short_name cannot be empty")
+		return nil, err
 	}
 
 	s.logger.Info("Uploading HTML content", "short_name", shortName, "content_length", len(htmlContent))
@@ -196,6 +211,7 @@ func (s *Server) handleShareHTML(ctx context.Context, request mcp.CallToolReques
 	// Upload to GCS
 	url, err := s.gcsService.UploadHTML(ctx, htmlContent, shortName)
 	if err != nil {
+		s.capture(err)
 		uploadsTotal.WithLabelValues("error").Inc()
 		s.logger.Error("Failed to upload HTML content", "error", err, "short_name", shortName)
 		return nil, fmt.Errorf("failed to upload HTML content: %w", err)
@@ -210,4 +226,10 @@ func (s *Server) handleShareHTML(ctx context.Context, request mcp.CallToolReques
 			mcp.NewTextContent(fmt.Sprintf("HTML content uploaded successfully! You can access it at: %s", url)),
 		},
 	}, nil
+}
+
+func (s *Server) capture(err error) {
+	if s.sentry != nil {
+		s.sentry.CaptureError(err)
+	}
 }
