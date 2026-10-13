@@ -22,7 +22,6 @@ func Init(dsn, environment string, logger *slog.Logger) *Sentry {
 		Environment:      environment,
 		BeforeSend:       ScrubEvent,
 		AttachStacktrace: false,
-		SendDefaultPII:   false,
 		EnableTracing:    false,
 	})
 	if err != nil {
