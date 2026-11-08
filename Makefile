@@ -17,7 +17,7 @@ build: test ## Builds $(APP_NAME) go binary for local arch
 ##@ Testing
 test: ## Run unit tests
 	@echo "== test"
-	go test -v -race -cover ./...
+	go test -v -race -coverpkg=./... -coverprofile=coverage.out ./...
 
 ##@ Quality
 check: tools ## Runs lint, fmt and vet checks against the codebase
