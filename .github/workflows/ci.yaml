@@ -64,7 +64,7 @@ jobs:
       if: github.event_name == 'pull_request'
       env:
         CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
-      run: '"$RUNNER_TEMP/cs-coverage" check --project-url https://api.codescene.io/v2/projects/66419 --coverage-files coverage.lcov'
+      run: '"$RUNNER_TEMP/cs-coverage" check --project-id 66419 --coverage-files coverage.lcov'
 
     - name: Upload CodeScene coverage
       if: github.event_name == 'push'
