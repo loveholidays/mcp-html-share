@@ -46,10 +46,10 @@ jobs:
 
     - name: Convert coverage to LCOV
       run: |
-        go run github.com/jandelgado/gcov2lcov@v1.1.1 -infile=coverage.out -outfile=coverage.lcov
+        go run github.com/jandelgado/gcov2lcov@v1.1.1 -infile=coverage.out -outfile=coverage.info
         python3 - <<'PY'
         from pathlib import Path
-        report = Path("coverage.lcov")
+        report = Path("coverage.info")
         report.write_text(report.read_text().replace(f"SF:{Path.cwd()}/", "SF:"))
         PY
 
@@ -64,13 +64,13 @@ jobs:
       if: github.event_name == 'pull_request'
       env:
         CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
-      run: '"$RUNNER_TEMP/cs-coverage" check --project-id 66419 --coverage-files coverage.lcov'
+      run: '"$RUNNER_TEMP/cs-coverage" check --project-id 66419 --coverage-files coverage.info'
 
     - name: Upload CodeScene coverage
       if: github.event_name == 'push'
       env:
         CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
-      run: '"$RUNNER_TEMP/cs-coverage" upload --format lcov --metric line-coverage coverage.lcov'
+      run: '"$RUNNER_TEMP/cs-coverage" upload --format lcov --metric line-coverage coverage.info'
 
   build:
     runs-on: ubuntu-latest
