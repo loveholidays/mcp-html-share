@@ -180,4 +180,6 @@ it, which must be verified after merge.
 
 ## License
 
+Coverage onboarding documentation-only integration trial.
+
 LGPL-3.0 - see [LICENSE](LICENSE) file.
