@@ -155,6 +155,29 @@ make test
 make run-http BUCKET=your-bucket-name
 ```
 
+### CodeScene coverage
+
+Run `make coverage` with Go and Python 3 installed to generate `coverage.out`
+and `coverage.info`. The report includes every production Go file, including
+packages without tests. Report validation fails if a file is omitted or source
+paths do not match this repository.
+
+The CodeScene coverage workflow uses the public Go-to-LCOV converter and a
+checksum-pinned CodeScene CLI directly. It checks project `66419` on pull
+requests and uploads full reports from `main` for scheduled CodeScene analysis.
+Python verifier tests also produce `tooling.info` so the coverage helpers have
+measured coverage themselves.
+The aggregate requires both the current CLI policy verdict and the native
+`CodeScene Code Coverage (main)` check to pass. Existing code-health checks,
+coverage thresholds and repository merge rules are unchanged.
+
+This public repository needs a repository-scoped `CS_TOKEN` Actions secret
+approved for CodeScene coverage checks and uploads. Private-only organization
+secrets are unavailable here. Missing credentials fail the coverage workflow,
+including secret-restricted pull requests; ordinary CI tests run independently.
+An accepted main upload becomes visible only after a CodeScene analysis consumes
+it, which must be verified after merge.
+
 ## License
 
 LGPL-3.0 - see [LICENSE](LICENSE) file.
