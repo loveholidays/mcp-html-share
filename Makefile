@@ -1,7 +1,7 @@
 APP_NAME=mcp-html-share
 GOFILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all build lint test docker clean tools check run run-http help
+.PHONY: all build lint test coverage docker clean tools check run run-http help
 
 all: build
 
@@ -18,6 +18,13 @@ build: test ## Builds $(APP_NAME) go binary for local arch
 test: ## Run unit tests
 	@echo "== test"
 	go test -v -race -coverpkg=./... -coverprofile=coverage.out ./...
+
+coverage: ## Run unit tests and write a full-package coverage profile
+	rm -f coverage.out coverage.info
+	go test -v -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+	go run github.com/jandelgado/gcov2lcov@51ca2a7f808b9da700efd71ae060e4c9e0deefc9 -infile=coverage.out -outfile=coverage.info
+	python3 scripts/coverage_report.py
+	python3 -m unittest discover -s scripts -p 'test_coverage_report.py'
 
 ##@ Quality
 check: tools ## Runs lint, fmt and vet checks against the codebase
