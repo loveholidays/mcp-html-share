@@ -13,6 +13,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      tooling_coverage_setup_result: ${{ steps.tooling_coverage_setup.outcome }}
+    permissions:
+      contents: read
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -38,44 +42,60 @@ jobs:
         go mod download
         make tools
 
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install coverage tooling
+      id: tooling_coverage_setup
+      continue-on-error: true
+      run: "python -m pip install --require-hashes --only-binary=:all: -r .github/coverage/requirements.txt"
+
     - name: Run linting and checks
       run: make check
 
-    - name: Run tests
+    - name: Run Go tests
+      id: go_test
       run: make test
 
-    - name: Convert coverage to LCOV
-      run: |
-        go run github.com/jandelgado/gcov2lcov@v1.1.1 -infile=coverage.out -outfile=coverage.info
-        python3 - <<'PY'
-        from pathlib import Path
-        report = Path("coverage.info")
-        report.write_text(report.read_text().replace(f"SF:{Path.cwd()}/", "SF:"))
-        PY
-
-    - name: Install CodeScene coverage CLI
-      run: |
-        curl -fsSL https://downloads.codescene.io/enterprise/cli/cs-coverage-linux-amd64-992b0e502d0bfa91ee399aa73d44bc380de3e866.zip -o "$RUNNER_TEMP/cs-coverage.zip"
-        echo "73d0db846505cb2e93a8a6b453b8a05f59c8fced649dbd8660d2258c204595b8  $RUNNER_TEMP/cs-coverage.zip" | sha256sum --check
-        unzip -p "$RUNNER_TEMP/cs-coverage.zip" cs-coverage > "$RUNNER_TEMP/cs-coverage"
-        chmod +x "$RUNNER_TEMP/cs-coverage"
-
-    - name: Check CodeScene coverage
-      if: github.event_name == 'pull_request'
+    - name: Run Python tooling tests once
+      id: tooling_test
       env:
-        CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
-      run: '"$RUNNER_TEMP/cs-coverage" check --project-id 66419 --coverage-files coverage.info'
+        COVERAGE_FILE: tooling.coverage
+      run: |
+        if python -c 'import coverage' >/dev/null 2>&1; then
+          python -m coverage run --source=scripts -m unittest discover -s scripts -p 'test_*.py'
+        else
+          python -m unittest discover -s scripts -p 'test_*.py'
+        fi
 
-    - name: Upload CodeScene coverage
-      if: github.event_name == 'push'
-      env:
-        CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
-      run: '"$RUNNER_TEMP/cs-coverage" upload --format lcov --metric line-coverage coverage.info'
+    - name: Write report revision
+      if: always()
+      continue-on-error: true
+      run: git rev-parse HEAD > coverage.sha
+
+    - name: Upload native coverage inputs
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-${{ github.event.pull_request.head.sha || github.sha }}
+        path: |
+          coverage.out
+          tooling.coverage
+          coverage.sha
+        if-no-files-found: warn
+        overwrite: true
+        retention-days: 7
 
   build:
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -116,3 +136,124 @@ jobs:
         cache-to: type=gha,mode=max
         build-args: |
           BUILDKIT_INLINE_CACHE=1
+
+  codescene:
+    name: CodeScene coverage check
+    if: always()
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE_REF: ${{ github.base_ref }}
+      NATIVE_RESULT: ${{ needs.test.result }}
+      TOOLING_COVERAGE_SETUP_RESULT: ${{ needs.test.outputs.tooling_coverage_setup_result }}
+    steps:
+    - name: Require successful native test and coverage setup
+      run: |
+        test "$NATIVE_RESULT" = success
+        test "$TOOLING_COVERAGE_SETUP_RESULT" = success
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: coverage-${{ github.event.pull_request.head.sha || github.sha }}
+
+    - name: Verify native report revision and inputs
+      run: |
+        test "$(cat coverage.sha)" = "$HEAD_SHA"
+        test -s coverage.out
+        test -s tooling.coverage
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: false
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install coverage and verdict dependencies
+      run: "python -m pip install --require-hashes --only-binary=:all: -r .github/coverage/requirements.txt"
+
+    - name: Convert and validate native Go coverage
+      run: make coverage-report
+
+    - name: Add report validation coverage and export tooling LCOV
+      env:
+        COVERAGE_FILE: tooling.coverage
+      run: |
+        python -m coverage run --append --source=scripts scripts/coverage_report.py
+        python -m coverage lcov -o tooling.info
+        git diff --exit-code
+
+    - name: Install pinned CodeScene coverage CLI
+      env:
+        CLI_URL: https://downloads.codescene.io/enterprise/cli/cs-coverage-linux-amd64-992b0e502d0bfa91ee399aa73d44bc380de3e866.zip
+      run: |
+        curl --fail --silent --show-error --location --retry 3 "$CLI_URL" --output "$RUNNER_TEMP/cs-coverage.zip"
+        echo "73d0db846505cb2e93a8a6b453b8a05f59c8fced649dbd8660d2258c204595b8  $RUNNER_TEMP/cs-coverage.zip" | sha256sum --check
+        mkdir "$RUNNER_TEMP/codescene-coverage"
+        unzip -q "$RUNNER_TEMP/cs-coverage.zip" -d "$RUNNER_TEMP/codescene-coverage"
+        chmod +x "$RUNNER_TEMP/codescene-coverage/cs-coverage"
+        echo "$RUNNER_TEMP/codescene-coverage" >> "$GITHUB_PATH"
+
+    - name: Require CodeScene upload credential
+      env:
+        CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
+      run: |
+        if [ -z "$CS_ACCESS_TOKEN" ]; then
+          echo '::error::A repository-scoped CS_TOKEN is required for this public repository.'
+          exit 1
+        fi
+
+    - name: Run native PR coverage policy
+      if: github.event_name == 'pull_request'
+      env:
+        CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
+        CS_DISABLE_VERSION_CHECK: '1'
+      run: |
+        log="$RUNNER_TEMP/codescene-coverage-check.log"
+        cs-coverage check --project-id 66419 --verbose --coverage-files 'coverage.info;tooling.info' > "$log" 2>&1 || { cat "$log"; exit 1; }
+        cat "$log"
+        python scripts/codescene_verdict.py "$log" "$HEAD_SHA" "$BASE_REF"
+
+    - name: Verify native GitHub coverage result
+      if: github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        for attempt in {1..30}; do
+          gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" > "$RUNNER_TEMP/codescene-checks.json"
+          result=$(jq -sr --arg name "CodeScene Code Coverage ($BASE_REF)" \
+            '[.[].check_runs[] | select(.name == $name and .app.slug == "codescene-access" and .app.id == 3755875)] | sort_by(.id) | last | .conclusion // "pending"' \
+            "$RUNNER_TEMP/codescene-checks.json")
+          if [ "$result" = success ]; then
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "::error::Native CodeScene coverage did not succeed: $result"
+        exit 1
+
+    - name: Upload main coverage for scheduled analysis
+      if: github.event_name == 'push'
+      env:
+        CS_ACCESS_TOKEN: ${{ secrets.CS_TOKEN }}
+        CS_DISABLE_VERSION_CHECK: '1'
+      run: |
+        cs-coverage upload --format lcov --metric line-coverage coverage.info
+        cs-coverage upload --format lcov --metric line-coverage tooling.info
