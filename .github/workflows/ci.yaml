@@ -47,6 +47,9 @@ jobs:
       with:
         python-version: '3.13'
 
+    - name: Install Python tooling test dependencies
+      run: "python -m pip install --require-hashes --only-binary=:all: -r .github/coverage/requirements-tests.txt"
+
     - name: Install coverage tooling
       id: tooling_coverage_setup
       continue-on-error: true
