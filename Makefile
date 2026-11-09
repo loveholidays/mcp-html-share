@@ -17,7 +17,7 @@ build: test ## Builds $(APP_NAME) go binary for local arch
 ##@ Testing
 test: ## Run unit tests
 	@echo "== test"
-	go test -v -race -coverpkg=./... -coverprofile=coverage.out ./...
+	go test -count=1 -v -race -coverpkg=./... -coverprofile=coverage.out ./...
 
 coverage: ## Run unit tests and write a full-package coverage profile
 	rm -f coverage.out coverage.info
