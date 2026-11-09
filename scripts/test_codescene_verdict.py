@@ -35,7 +35,7 @@ class CodeSceneVerdictTests(unittest.TestCase):
         )
 
     def test_current_passing_verdict_is_accepted(self):
-        validate(self.output(), self.sha, "main")
+        validate(self.output(), self.sha, "other")
 
     def test_stale_head_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "commit_sha"):
